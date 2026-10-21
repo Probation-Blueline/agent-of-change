@@ -1,0 +1,11 @@
+{
+  "title": "ata_personal_tutorial",
+  "description": "An English learning platform that tracks study streaks and lets users create, edit, and manage lessons with detailed performance stats.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
