@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Clipboard,
   Clock3,
+  Compass,
   Copy,
   Download,
   ExternalLink,
@@ -20,12 +21,15 @@ import {
   FileUp,
   FolderOpen,
   GraduationCap,
+  Heart,
   History,
   Home,
   Library,
   Lightbulb,
   Link2,
+  ListOrdered,
   LogOut,
+  Mail,
   Menu,
   MessageSquareText,
   Paperclip,
@@ -36,7 +40,6 @@ import {
   Search,
   Send,
   Settings,
-  Sparkles,
   SquarePen,
   ThumbsDown,
   ThumbsUp,
@@ -76,6 +79,11 @@ import {
   TooltipTrigger,
 } from "./components/ui/tooltip";
 import { LoginScreen } from "./components/LoginScreen";
+import {
+  EditProfileDialog,
+  type UserProfile,
+  getInitials,
+} from "./components/EditProfileDialog";
 
 type View = "home" | "chat" | "resources" | "profile";
 type ResourceType = "Tất cả" | "Tài liệu" | "Bài tập" | "Lộ trình";
@@ -88,6 +96,17 @@ interface ChatMessage {
 }
 
 const AUTH_STORAGE_KEY = "ata-authenticated";
+const USER_PROFILE_STORAGE_KEY = "ata-user-profile";
+
+const DEFAULT_USER_PROFILE: UserProfile = {
+  name: "Nguyễn An",
+  email: "an.nguyen@example.com",
+  role: "Học viên",
+  grade: "Lớp 12",
+  level: "B1+",
+  points: 1280,
+};
+
 const HERO_IMAGE =
   "https://images.unsplash.com/photo-1531496378573-7be09a2697d8?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=1200";
 
@@ -119,7 +138,7 @@ const defaultResources: LibraryResource[] = [
 ];
 
 const quickActions = [
-  { icon: Bot, title: "Hỏi ATA AI", description: "Giải thích bài tập tức thì", view: "chat" as View, tone: "bg-zinc-100 text-zinc-900", mascot: "/assets/ata/ata_happy.png" },
+  { icon: Bot, title: "Hỏi ATA AI", description: "Giải thích bài tập tức thì", view: "chat" as View, tone: "bg-zinc-100 text-zinc-900" },
   { icon: Library, title: "Tra cứu tài liệu", description: "Tìm giáo trình và bài tập", view: "resources" as View, tone: "bg-zinc-100 text-zinc-900" },
   { icon: Zap, title: "Luyện nhanh 10 phút", description: "Bài học ngắn theo mục tiêu", view: "resources" as View, tone: "bg-zinc-100 text-zinc-900" },
   { icon: TrendingUp, title: "Xem tiến độ", description: "Theo dõi mục tiêu tuần", view: "profile" as View, tone: "bg-zinc-100 text-zinc-900" },
@@ -128,45 +147,43 @@ const quickActions = [
 const suggestedPrompts = [
   {
     text: "Giải thích bài toán này theo từng bước",
-    pose: "/assets/ata/ata_explaining.png",
-    label: "Explaining",
+    icon: BookOpen,
+    label: "Giải thích",
   },
   {
     text: "Gợi ý lộ trình ôn thi IELTS 6.5",
-    pose: "/assets/ata/ata_thinking.png",
-    label: "Thinking",
+    icon: GraduationCap,
+    label: "Lộ trình",
   },
   {
     text: "Kiểm tra và sửa đoạn văn tiếng Anh",
-    pose: "/assets/ata/ata_encouraging.png",
-    label: "Encouraging",
+    icon: FileCheck,
+    label: "Kiểm tra",
   },
   {
     text: "Tạo 5 câu hỏi ôn tập về thì quá khứ",
-    pose: "/assets/ata/ata_excited.png",
-    label: "Excited",
+    icon: BrainCircuit,
+    label: "Ôn tập",
   },
 ];
 
-function AtaLogo({ size = 36 }: { size?: number }) {
+function AtaLogo({ size = 32, className = "" }: { size?: number; className?: string }) {
   return (
-    <img
-      src="/assets/ata/ata_icon.png"
-      alt="ATA Logo"
-      className="rounded-md object-contain shadow-xs"
+    <div
       style={{ width: size, height: size }}
-    />
+      className={`flex items-center justify-center rounded-md bg-zinc-950 text-white font-black text-sm tracking-tighter select-none shadow-xs ${className}`}
+    >
+      A
+    </div>
   );
 }
 
 function AtaWordmark({ className = "" }: { className?: string }) {
   return (
     <span className={`inline-flex items-center gap-2.5 whitespace-nowrap ${className}`} aria-label="ATA - Adaptive Tutoring Agent">
-      <img
-        src="/assets/ata/ata_icon.png"
-        alt="ATA Icon"
-        className="size-8 rounded-md object-contain"
-      />
+      <div className="flex size-8 items-center justify-center rounded-md bg-zinc-950 text-white font-black text-sm tracking-tighter select-none shadow-xs">
+        A
+      </div>
       <span className="flex flex-col text-left leading-none">
         <span className="text-xl font-black tracking-wide text-foreground">ATA</span>
         <span className="text-[10px] font-semibold text-muted-foreground tracking-tight">Adaptive Tutoring Agent</span>
@@ -197,7 +214,19 @@ function SectionHeading({ title, description, action }: { title: string; descrip
   );
 }
 
-function AppHeader({ view, setView, onLogout }: { view: View; setView: (view: View) => void; onLogout: () => void }) {
+function AppHeader({
+  view,
+  setView,
+  onLogout,
+  userProfile,
+  onOpenEditProfile,
+}: {
+  view: View;
+  setView: (view: View) => void;
+  onLogout: () => void;
+  userProfile: UserProfile;
+  onOpenEditProfile: () => void;
+}) {
   const navItems = [
     { label: "Trang chủ", value: "home" as View, icon: Home },
     { label: "Trợ lý ATA", value: "chat" as View, icon: Bot },
@@ -206,41 +235,64 @@ function AppHeader({ view, setView, onLogout }: { view: View; setView: (view: Vi
   ];
 
   return (
-    <header className="sticky top-0 z-40 shrink-0 border-b border-border bg-white/95 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 shrink-0 liquid-glass border-b border-white/60 bg-white/75 backdrop-blur-2xl shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
       <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2 sm:px-6 lg:h-16 lg:flex-nowrap lg:justify-start lg:gap-6 lg:px-8 lg:py-0">
         <Button type="button" variant="ghost" onClick={() => setView("home")} className="h-auto shrink-0 gap-2.5 p-0 hover:bg-transparent" aria-label="Về trang chủ">
           <AtaWordmark className="h-8 text-foreground" />
         </Button>
-        <nav className="order-last grid h-11 w-full grid-cols-4 items-center gap-1 lg:order-none lg:flex lg:h-full lg:flex-1 lg:justify-center" aria-label="Điều hướng chính">
+        <nav className="order-last grid h-11 w-full grid-cols-4 items-center gap-1.5 lg:order-none lg:flex lg:h-full lg:flex-1 lg:justify-center" aria-label="Điều hướng chính">
           {navItems.map(({ label, value, icon: Icon }) => (
             <Button
               key={value}
               type="button"
-              variant="ghost"
+              variant={view === value ? "default" : "ghost"}
               onClick={() => setView(value)}
-              className={`h-9 min-w-0 rounded-md px-1.5 text-xs font-semibold transition-colors sm:px-3 sm:text-sm md:px-4 ${
+              className={`h-9 min-w-0 rounded-md px-2 text-xs font-semibold transition-all sm:px-3 sm:text-sm md:px-4 ${
                 view === value
-                  ? "bg-secondary text-primary hover:bg-zinc-200 hover:text-zinc-950"
-                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
+                  ? "bg-zinc-950 !text-white font-bold shadow-xs hover:bg-zinc-900 hover:!text-white"
+                  : "liquid-glass-subtle text-zinc-700 hover:liquid-glass hover:text-zinc-950"
               }`}
             >
-              <Icon size={16} className="shrink-0" /> <span className="truncate">{label}</span>
+              <Icon size={16} className={`shrink-0 ${view === value ? "!text-white" : ""}`} /> <span className="truncate">{label}</span>
             </Button>
           ))}
         </nav>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-          <Button type="button" variant="ghost" size="icon" className="relative hidden size-9 rounded-md text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 sm:inline-flex" aria-label="Thông báo">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <Button type="button" variant="ghost" size="icon" className="liquid-glass-subtle relative hidden size-9 rounded-md text-zinc-700 hover:liquid-glass hover:text-zinc-950 sm:inline-flex" aria-label="Thông báo">
             <Bell size={17} />
-            <span className="absolute right-2 top-2 size-1.5 rounded-full bg-primary" />
+            <span className="absolute right-2 top-2 size-1.5 rounded-full bg-zinc-950" />
           </Button>
-          <Button type="button" variant="ghost" onClick={() => setView("profile")} className="group h-9 gap-2.5 rounded-md px-2 hover:bg-zinc-100 hover:text-zinc-950">
-            <span className="flex size-7 items-center justify-center rounded-md bg-zinc-900 text-xs font-bold text-white">NA</span>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setView("profile")}
+            className="liquid-glass-subtle group h-9 gap-2.5 rounded-md px-2.5 hover:liquid-glass hover:text-zinc-950 transition-all cursor-pointer"
+            title="Xem hồ sơ & tiến độ"
+          >
+            <span className="flex size-6 items-center justify-center rounded-md bg-zinc-950 text-xs font-bold text-white shadow-2xs">
+              {getInitials(userProfile.name)}
+            </span>
             <span className="hidden text-left xl:block">
-              <span className="block text-sm font-semibold leading-none text-foreground group-hover:text-zinc-950 transition-colors">Nguyễn An</span>
-              <span className="mt-1 block text-[11px] font-medium text-muted-foreground group-hover:text-zinc-700 transition-colors">Học viên</span>
+              <span className="block text-xs font-semibold leading-none text-foreground group-hover:text-zinc-950 transition-colors">
+                {userProfile.name}
+              </span>
+              <span className="mt-0.5 block text-[10px] font-medium text-muted-foreground group-hover:text-zinc-700 transition-colors">
+                {userProfile.role}
+              </span>
             </span>
           </Button>
-          <Button type="button" variant="ghost" size="icon" onClick={onLogout} className="size-9 rounded-md text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Đăng xuất">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onOpenEditProfile}
+            className="liquid-glass-subtle size-9 rounded-md text-zinc-600 hover:liquid-glass hover:text-zinc-950 hidden sm:inline-flex"
+            aria-label="Chỉnh sửa hồ sơ"
+            title="Chỉnh sửa hồ sơ"
+          >
+            <Settings size={15} />
+          </Button>
+          <Button type="button" variant="ghost" size="icon" onClick={onLogout} className="liquid-glass-subtle size-9 rounded-md text-zinc-600 hover:liquid-glass hover:text-zinc-950" aria-label="Đăng xuất">
             <LogOut size={16} />
           </Button>
         </div>
@@ -258,80 +310,105 @@ function HomeScreen({ setView, askAI, resources = defaultResources }: { setView:
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
-      <section className="grid overflow-hidden rounded-lg border border-border bg-white shadow-xs lg:min-h-[390px] lg:grid-cols-12">
+      <section className="liquid-glass-elevated grid overflow-hidden rounded-xl border border-white/80 shadow-[0_12px_40px_-6px_rgba(0,0,0,0.05)] lg:min-h-[390px] lg:grid-cols-12">
         <div className="flex flex-col justify-center p-5 sm:p-8 lg:col-span-7 lg:p-10 xl:p-12">
-          <div className="mb-4 inline-flex w-fit items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-900">
-            <Sparkles size={14} /> Meet Ata · Adaptive Tutoring Agent
+          <div className="mb-4 inline-flex w-fit items-center gap-2 rounded-md liquid-glass-pill px-3 py-1 text-xs font-semibold text-zinc-900 shadow-2xs">
+            ATA · Adaptive Tutoring Agent
           </div>
           <div role="heading" aria-level={1} className="max-w-2xl text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-4xl">
-            Học đúng cách, tiến bộ nhanh hơn cùng Ata.
+            Học đúng cách, tiến bộ nhanh hơn cùng ATA.
           </div>
           <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground">
-            Ata là gia sư AI thích ứng thấu hiểu phong cách học, hỗ trợ giải đáp từng bước và cùng bạn bứt phá mục tiêu. Learn smarter. Grow further.
+            Hệ thống gia sư AI thích ứng thấu hiểu phong cách học, hỗ trợ giải đáp từng bước và cùng bạn bứt phá mục tiêu. Learn smarter. Grow further.
           </p>
-          <div className="mt-7 flex max-w-2xl items-center gap-1 rounded-md border border-border bg-zinc-50/50 p-1.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-zinc-950/10 sm:gap-2">
-            <span className="ml-1 hidden size-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-zinc-200 bg-white sm:flex">
-              <img src="/assets/ata/ata_avatar.png" alt="Ata" className="size-full object-cover" />
+          <div className="mt-7 flex max-w-2xl items-center gap-1.5 rounded-md liquid-glass-pill p-1.5 focus-within:bg-white/95 focus-within:border-zinc-950 focus-within:ring-2 focus-within:ring-zinc-950/10 sm:gap-2">
+            <span className="ml-1 hidden size-8 shrink-0 items-center justify-center rounded-md bg-zinc-950 text-white shadow-2xs sm:flex">
+              <Bot size={16} />
             </span>
             <Input
               value={query}
               onChange={event => setQuery(event.target.value)}
               onKeyDown={event => event.key === "Enter" && submit()}
               className="h-10 min-w-0 flex-1 border-0 bg-transparent px-2 text-sm shadow-none focus-visible:ring-0 sm:text-base"
-              placeholder="Hỏi Ata bất kỳ điều gì..."
-              aria-label="Nhập câu hỏi cho Ata"
+              placeholder="Hỏi ATA bất kỳ bài tập, khái niệm hay lộ trình học..."
+              aria-label="Nhập câu hỏi cho ATA"
             />
-            <Button type="button" onClick={submit} className="h-10 shrink-0 rounded-md px-3 font-semibold shadow-none sm:px-5">
+            <Button type="button" onClick={submit} className="h-10 shrink-0 rounded-md px-4 font-semibold shadow-xs sm:px-5">
               <span className="hidden sm:inline">Hỏi ngay</span> <ArrowRight size={15} />
             </Button>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">Gợi ý: “Lập kế hoạch ôn IELTS 6.5 trong 4 tháng”</p>
         </div>
-        <div className="relative m-4 mt-0 flex flex-col justify-between overflow-hidden rounded-lg border border-border bg-gradient-to-b from-zinc-50 via-white to-zinc-50 p-5 lg:col-span-5 lg:m-5 lg:ml-0">
+        <div className="relative m-4 mt-0 flex flex-col justify-between overflow-hidden rounded-lg liquid-glass border border-white/80 p-5 shadow-xs lg:col-span-5 lg:m-5 lg:ml-0">
           <div className="flex items-center justify-between">
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-[11px] font-bold text-zinc-900 shadow-2xs">
-              <span className="size-1.5 rounded-full bg-emerald-500" /> Đồng hành cùng bạn
+            <span className="inline-flex items-center gap-1.5 rounded-md liquid-glass-pill px-2.5 py-1 text-[11px] font-bold text-zinc-900 shadow-2xs">
+              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" /> Hệ thống thích ứng v2.4
             </span>
             <span className="text-[11px] font-semibold text-muted-foreground">Different Learners. Same Goal.</span>
           </div>
 
-          <div className="my-auto flex items-center justify-center py-4">
-            <img
-              src="/assets/ata/ata_hero.png"
-              alt="Ata - Adaptive Tutoring Agent Mascot"
-              className="max-h-56 w-auto object-contain drop-shadow-sm transition-transform hover:scale-105 duration-300"
-            />
+          <div className="my-auto py-5">
+            <div className="rounded-md liquid-glass-subtle border border-white/70 p-4 shadow-2xs">
+              <div className="flex items-center justify-between border-b border-zinc-200/50 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex size-7 items-center justify-center rounded-md bg-zinc-950 text-white shadow-xs">
+                    <Bot size={15} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-zinc-950">Mô hình gia sư thích ứng</p>
+                    <p className="text-[10px] text-zinc-500">Cá nhân hóa theo dữ liệu học tập</p>
+                  </div>
+                </div>
+                <span className="rounded-md liquid-glass-pill px-2 py-0.5 text-[10px] font-bold text-zinc-800">Live AI</span>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-md liquid-glass p-2 border border-white/70 shadow-2xs">
+                  <p className="text-sm font-bold text-zinc-950">98.4%</p>
+                  <p className="text-[10px] text-zinc-500">Độ chuẩn xác</p>
+                </div>
+                <div className="rounded-md liquid-glass p-2 border border-white/70 shadow-2xs">
+                  <p className="text-sm font-bold text-zinc-950">&lt; 1s</p>
+                  <p className="text-[10px] text-zinc-500">Phản hồi tức thì</p>
+                </div>
+                <div className="rounded-md liquid-glass p-2 border border-white/70 shadow-2xs">
+                  <p className="text-sm font-bold text-zinc-950">B1+</p>
+                  <p className="text-[10px] text-zinc-500">Cấp độ hiện tại</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-3">
-            {/* Real use goal card */}
-            <div className="rounded-md border border-zinc-200 bg-white p-3 shadow-2xs">
+            {/* Goal card */}
+            <div className="rounded-md liquid-glass border border-white/80 p-3 shadow-2xs">
               <div className="flex items-center gap-2.5">
-                <img src="/assets/ata/ata_happy.png" alt="Ata Happy" className="size-8 rounded-md object-contain" />
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-zinc-950 text-white shadow-xs">
+                  <Trophy size={15} />
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-zinc-900 truncate">Mục tiêu tuần này</p>
                   <p className="text-[11px] text-zinc-500 truncate">4/5 buổi học đã hoàn thành</p>
                 </div>
                 <span className="text-xs font-bold text-zinc-900">80%</span>
               </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-md bg-zinc-100">
+              <div className="mt-2 h-1.5 overflow-hidden rounded-md bg-zinc-200/80">
                 <div className="h-full w-4/5 rounded-md bg-zinc-950" />
               </div>
             </div>
 
-            {/* 4 ATA Principles from image */}
+            {/* 4 ATA Principles with clean monochrome icons */}
             <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div className="flex items-center gap-1.5 rounded-md bg-zinc-100/80 px-2.5 py-1.5 font-medium text-zinc-800">
-                <span className="text-xs">🎓</span> <span>Adaptive</span>
+              <div className="flex items-center gap-1.5 rounded-md liquid-glass-subtle hover:liquid-glass px-2.5 py-1.5 font-medium text-zinc-800 transition-all border border-white/60">
+                <GraduationCap size={13} className="text-zinc-900 shrink-0" /> <span>Adaptive</span>
               </div>
-              <div className="flex items-center gap-1.5 rounded-md bg-zinc-100/80 px-2.5 py-1.5 font-medium text-zinc-800">
-                <span className="text-xs">💙</span> <span>Supportive</span>
+              <div className="flex items-center gap-1.5 rounded-md liquid-glass-subtle hover:liquid-glass px-2.5 py-1.5 font-medium text-zinc-800 transition-all border border-white/60">
+                <Heart size={13} className="text-zinc-900 shrink-0" /> <span>Supportive</span>
               </div>
-              <div className="flex items-center gap-1.5 rounded-md bg-zinc-100/80 px-2.5 py-1.5 font-medium text-zinc-800">
-                <span className="text-xs">💡</span> <span>Knowledgeable</span>
+              <div className="flex items-center gap-1.5 rounded-md liquid-glass-subtle hover:liquid-glass px-2.5 py-1.5 font-medium text-zinc-800 transition-all border border-white/60">
+                <Lightbulb size={13} className="text-zinc-900 shrink-0" /> <span>Knowledgeable</span>
               </div>
-              <div className="flex items-center gap-1.5 rounded-md bg-zinc-100/80 px-2.5 py-1.5 font-medium text-zinc-800">
-                <span className="text-xs">🌱</span> <span>Always with you</span>
+              <div className="flex items-center gap-1.5 rounded-md liquid-glass-subtle hover:liquid-glass px-2.5 py-1.5 font-medium text-zinc-800 transition-all border border-white/60">
+                <Compass size={13} className="text-zinc-900 shrink-0" /> <span>Always with you</span>
               </div>
             </div>
           </div>
@@ -341,15 +418,17 @@ function HomeScreen({ setView, askAI, resources = defaultResources }: { setView:
       <section className="py-8" aria-labelledby="quick-access">
         <SectionHeading title="Bạn muốn làm gì?" description="Truy cập nhanh các công cụ học tập thường dùng" />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {quickActions.map(({ icon: Icon, title, description, view, tone }) => (
+          {quickActions.map(({ icon: Icon, title, description, view }) => (
             <Button
               key={title}
               type="button"
               variant="ghost"
               onClick={() => setView(view)}
-              className="group h-auto justify-start rounded-lg border border-border bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-zinc-400 hover:bg-zinc-50/60 hover:shadow-xs"
+              className="liquid-glass liquid-glass-interactive group h-auto justify-start rounded-lg border border-white/80 p-4 text-left shadow-xs hover:border-white hover:bg-white/90"
             >
-              <span className={`mr-3 flex size-10 shrink-0 items-center justify-center rounded-md ${tone}`}><Icon size={19} /></span>
+              <span className="liquid-glass-pill mr-3 flex size-10 shrink-0 items-center justify-center rounded-md border border-white/80 shadow-2xs text-zinc-950 group-hover:bg-zinc-950 group-hover:text-white transition-colors">
+                <Icon size={19} />
+              </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-bold text-foreground group-hover:text-zinc-950 transition-colors">{title}</span>
                 <span className="mt-1 block text-xs font-normal text-muted-foreground group-hover:text-zinc-800 transition-colors">{description}</span>
@@ -360,113 +439,132 @@ function HomeScreen({ setView, askAI, resources = defaultResources }: { setView:
         </div>
       </section>
 
-      {/* ATA In Real Use Section */}
-      <section className="py-4 pb-8" aria-labelledby="ata-real-use">
+      {/* ATA Adaptive Features Section */}
+      <section className="py-4 pb-8" aria-labelledby="ata-features">
         <SectionHeading
-          title="Đồng hành cùng Ata trong thực tế"
-          description="Khám phá cách gia sư AI thích ứng linh hoạt theo từng bước tiến của bạn"
+          title="Phương pháp học tập thích ứng cùng ATA"
+          description="Khám phá cơ chế gia sư thông minh giúp bạn tối ưu hóa thời gian và bứt phá mục tiêu"
           action={
             <Button
               type="button"
               variant="outline"
-              onClick={() => askAI("Ata ơi, hôm nay hãy đồng hành và hướng dẫn mình học bài mới nhé!")}
-              className="rounded-md text-sm font-semibold text-zinc-900 hover:bg-zinc-100 hover:text-zinc-950"
+              onClick={() => askAI("ATA ơi, hôm nay hãy đồng hành và hướng dẫn mình học bài mới nhé!")}
+              className="liquid-glass-pill rounded-md text-sm font-semibold text-zinc-900 hover:liquid-glass hover:text-zinc-950 transition-all border-white/80"
             >
-              Trò chuyện cùng Ata <ArrowRight size={15} />
+              Trò chuyện cùng ATA <ArrowRight size={15} />
             </Button>
           }
         />
         <div className="grid gap-4 md:grid-cols-3">
-          {/* Real use 1: Nice try */}
-          <div className="flex flex-col justify-between rounded-lg border border-border bg-white p-5 shadow-2xs transition-all hover:-translate-y-0.5 hover:border-zinc-400">
+          {/* Feature 1: Step by step guidance */}
+          <div className="liquid-glass liquid-glass-interactive flex flex-col justify-between rounded-lg border border-white/80 p-5 shadow-xs hover:border-white hover:bg-white/90">
             <div>
-              <div className="overflow-hidden rounded-md border border-zinc-100 bg-zinc-50 p-2 flex items-center justify-center">
-                <img
-                  src="/assets/ata/use_nice_try.png"
-                  alt="Nice try! Let's look at this step together. You can do it!"
-                  className="max-h-36 w-auto object-contain"
-                />
+              <div className="rounded-md liquid-glass-subtle border border-white/70 p-4 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-zinc-200/50 pb-2.5">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quy trình giải bài</span>
+                  <span className="rounded-md liquid-glass-pill px-1.5 py-0.5 text-[10px] font-bold text-zinc-800">3 bước</span>
+                </div>
+                <div className="mt-2.5 space-y-1.5 font-mono text-[11px] text-zinc-700">
+                  <div className="rounded liquid-glass p-1.5 border border-white/80 shadow-2xs">1. Nhận diện từ khóa & ngữ cảnh</div>
+                  <div className="rounded liquid-glass p-1.5 border border-white/80 shadow-2xs">2. Áp dụng công thức nền tảng</div>
+                  <div className="rounded liquid-glass p-1.5 border border-white/80 shadow-2xs">3. Đối chiếu và loại trừ phương án nhiễu</div>
+                </div>
               </div>
               <div className="mt-4 flex items-center gap-2">
-                <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-800">Supportive</span>
-                <span className="text-xs font-semibold text-zinc-500">Khi gặp thử thách</span>
+                <span className="rounded-md liquid-glass-pill px-2 py-0.5 text-[11px] font-bold text-zinc-800">Supportive</span>
+                <span className="text-xs font-semibold text-zinc-500">Gỡ rối bài tập khó</span>
               </div>
               <h3 className="mt-2 text-base font-bold text-zinc-900 leading-snug">
-                "Nice try! Cùng xem lại bước này"
+                Hướng dẫn tư duy từng bước logic
               </h3>
               <p className="mt-1.5 text-xs text-muted-foreground leading-5">
-                Khi giải sai hoặc chưa hiểu rõ, Ata kiên nhẫn khích lệ và cùng bạn phân tích từng bước nhỏ để tìm ra hướng đi đúng.
+                Khi giải sai hoặc chưa hiểu rõ, ATA kiên nhẫn chia nhỏ vấn đề và dẫn dắt từng bước suy luận thay vì chỉ đưa ra đáp án.
               </p>
             </div>
             <Button
               type="button"
               variant="outline"
-              onClick={() => askAI("Ata ơi, mình đang có một câu bài tập khó, hãy cùng mình giải từng bước nhé!")}
-              className="mt-4 h-9 w-full rounded-md text-xs font-semibold text-zinc-800 hover:bg-zinc-100 hover:text-zinc-950"
+              onClick={() => askAI("ATA ơi, mình đang có một câu bài tập khó, hãy cùng mình giải từng bước nhé!")}
+              className="mt-4 h-9 w-full rounded-md liquid-glass-subtle text-xs font-semibold text-zinc-800 hover:liquid-glass hover:text-zinc-950 border-white/80 transition-all"
             >
               Hỏi bài tập khó <ArrowRight size={13} />
             </Button>
           </div>
 
-          {/* Real use 2: Got it */}
-          <div className="flex flex-col justify-between rounded-lg border border-border bg-white p-5 shadow-2xs transition-all hover:-translate-y-0.5 hover:border-zinc-400">
+          {/* Feature 2: Deep understanding */}
+          <div className="liquid-glass liquid-glass-interactive flex flex-col justify-between rounded-lg border border-white/80 p-5 shadow-xs hover:border-white hover:bg-white/90">
             <div>
-              <div className="overflow-hidden rounded-md border border-zinc-100 bg-zinc-50 p-2 flex items-center justify-center">
-                <img
-                  src="/assets/ata/use_got_it.png"
-                  alt="Got it! That's a great understanding!"
-                  className="max-h-36 w-auto object-contain"
-                />
+              <div className="rounded-md liquid-glass-subtle border border-white/70 p-4 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-zinc-200/50 pb-2.5">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Mô hình khái niệm</span>
+                  <span className="rounded-md liquid-glass-pill px-1.5 py-0.5 text-[10px] font-bold text-zinc-800">Deep Concept</span>
+                </div>
+                <div className="mt-2.5 rounded bg-zinc-950 p-2.5 text-white font-mono text-[11px] shadow-xs">
+                  Bản chất = Cấu trúc lõi + Ngữ cảnh thực tế
+                </div>
+                <p className="mt-2 text-[10px] text-zinc-500 italic">Hệ thống hóa quy luật cốt lõi giúp ghi nhớ dài hạn</p>
               </div>
               <div className="mt-4 flex items-center gap-2">
-                <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-800">Knowledgeable</span>
-                <span className="text-xs font-semibold text-zinc-500">Khi hiểu sâu bài</span>
+                <span className="rounded-md liquid-glass-pill px-2 py-0.5 text-[11px] font-bold text-zinc-800">Knowledgeable</span>
+                <span className="text-xs font-semibold text-zinc-500">Thấu hiểu bản chất</span>
               </div>
               <h3 className="mt-2 text-base font-bold text-zinc-900 leading-snug">
-                "Got it! Thấu hiểu sâu sắc"
+                Hệ thống hóa & Củng cố nền tảng
               </h3>
               <p className="mt-1.5 text-xs text-muted-foreground leading-5">
-                Khi nắm bắt đúng bản chất, Ata giúp bạn khái quát hóa công thức, củng cố quy luật và ghi nhớ dài hạn.
+                Khi nắm bắt đúng bản chất, ATA giúp bạn khái quát hóa công thức, củng cố quy tắc và hiểu rõ cơ chế vận dụng.
               </p>
             </div>
             <Button
               type="button"
               variant="outline"
-              onClick={() => askAI("Ata ơi, giải thích giúp mình cốt lõi của bài học này theo cách trực quan nhất!")}
-              className="mt-4 h-9 w-full rounded-md text-xs font-semibold text-zinc-800 hover:bg-zinc-100 hover:text-zinc-950"
+              onClick={() => askAI("ATA ơi, giải thích giúp mình cốt lõi của bài học này theo cách trực quan nhất!")}
+              className="mt-4 h-9 w-full rounded-md liquid-glass-subtle text-xs font-semibold text-zinc-800 hover:liquid-glass hover:text-zinc-950 border-white/80 transition-all"
             >
               Giải thích khái niệm <ArrowRight size={13} />
             </Button>
           </div>
 
-          {/* Real use 3: Level Up */}
-          <div className="flex flex-col justify-between rounded-lg border border-border bg-white p-5 shadow-2xs transition-all hover:-translate-y-0.5 hover:border-zinc-400">
+          {/* Feature 3: Level Up progression */}
+          <div className="liquid-glass liquid-glass-interactive flex flex-col justify-between rounded-lg border border-white/80 p-5 shadow-xs hover:border-white hover:bg-white/90">
             <div>
-              <div className="overflow-hidden rounded-md border border-zinc-100 bg-zinc-50 p-2 flex items-center justify-center">
-                <img
-                  src="/assets/ata/use_level_up.png"
-                  alt="Level Up! You're making real progress!"
-                  className="max-h-36 w-auto object-contain"
-                />
+              <div className="rounded-md liquid-glass-subtle border border-white/70 p-4 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-zinc-200/50 pb-2.5">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Đo lường năng lực</span>
+                  <span className="rounded-md bg-zinc-950 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-2xs">Band 6.5</span>
+                </div>
+                <div className="mt-2.5">
+                  <div className="flex justify-between text-[11px] font-semibold text-zinc-700">
+                    <span>Tiến độ hoàn thành</span>
+                    <span className="font-bold text-zinc-950">84%</span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded bg-zinc-200/80">
+                    <div className="h-full w-[84%] rounded bg-zinc-950" />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500">
+                  <span>Khởi điểm: Band 5.0</span>
+                  <span>Mục tiêu: Band 6.5+</span>
+                </div>
               </div>
               <div className="mt-4 flex items-center gap-2">
-                <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-800">Adaptive</span>
-                <span className="text-xs font-semibold text-zinc-500">Mốc tiến độ</span>
+                <span className="rounded-md liquid-glass-pill px-2 py-0.5 text-[11px] font-bold text-zinc-800">Adaptive</span>
+                <span className="text-xs font-semibold text-zinc-500">Lộ trình cá nhân</span>
               </div>
               <h3 className="mt-2 text-base font-bold text-zinc-900 leading-snug">
-                "Level Up! Bứt phá tiến độ"
+                Theo dõi tiến độ & Thăng hạng
               </h3>
               <p className="mt-1.5 text-xs text-muted-foreground leading-5">
-                Mỗi mốc rèn luyện đều được Ata ghi nhận để tự động điều chỉnh độ khó phù hợp với đà phát triển của bạn.
+                Mỗi mốc rèn luyện đều được ATA ghi nhận để tự động tinh chỉnh độ khó và chủ đề bài tập theo năng lực thực tế.
               </p>
             </div>
             <Button
               type="button"
               variant="outline"
               onClick={() => setView("profile")}
-              className="mt-4 h-9 w-full rounded-md text-xs font-semibold text-zinc-800 hover:bg-zinc-100 hover:text-zinc-950"
+              className="mt-4 h-9 w-full rounded-md liquid-glass-subtle text-xs font-semibold text-zinc-800 hover:liquid-glass hover:text-zinc-950 border-white/80 transition-all"
             >
-              Xem cột mốc của bạn <ArrowRight size={13} />
+              Xem tiến độ của bạn <ArrowRight size={13} />
             </Button>
           </div>
         </div>
@@ -476,32 +574,32 @@ function HomeScreen({ setView, askAI, resources = defaultResources }: { setView:
         <SectionHeading
           title="Tài liệu dành cho bạn"
           description="Đề xuất dựa trên mục tiêu và hoạt động gần đây"
-          action={<Button type="button" variant="ghost" onClick={() => setView("resources")} className="rounded-md text-sm font-semibold text-primary hover:bg-secondary hover:text-zinc-950">Xem thư viện <ArrowRight size={15} /></Button>}
+          action={<Button type="button" variant="ghost" onClick={() => setView("resources")} className="liquid-glass-pill rounded-md text-sm font-semibold text-primary hover:liquid-glass hover:text-zinc-950 transition-all">Xem thư viện <ArrowRight size={15} /></Button>}
         />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {resources.slice(0, 3).map(({ id, icon: Icon, type, title, description, meta, pages, tone, isUserUploaded }) => (
-            <article key={id} className={`group rounded-lg border bg-white p-5 transition-all hover:-translate-y-0.5 hover:shadow-xs ${isUserUploaded ? "border-zinc-900/40 ring-1 ring-zinc-900/10" : "border-border hover:border-zinc-400"}`}>
+          {resources.slice(0, 3).map(({ id, icon: Icon, type, title, description, meta, pages, isUserUploaded }) => (
+            <article key={id} className={`liquid-glass liquid-glass-interactive group rounded-lg border p-5 transition-all shadow-xs ${isUserUploaded ? "border-zinc-900/40 ring-1 ring-zinc-900/10" : "border-white/80 hover:border-white hover:bg-white/90"}`}>
               <div className="flex items-start justify-between">
-                <span className={`flex size-10 items-center justify-center rounded-md ${tone}`}><Icon size={19} /></span>
+                <span className="liquid-glass-pill flex size-10 items-center justify-center rounded-md border border-white/80 shadow-2xs text-zinc-950"><Icon size={19} /></span>
                 <div className="flex items-center gap-1.5">
                   {isUserUploaded && (
-                    <span className="rounded-md bg-zinc-100 border border-zinc-200 px-2 py-0.5 text-[10px] font-bold text-zinc-900">
+                    <span className="rounded-md liquid-glass-pill px-2 py-0.5 text-[10px] font-bold text-zinc-900 shadow-2xs">
                       Của bạn
                     </span>
                   )}
-                  <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-700">{type}</span>
+                  <span className="rounded-md liquid-glass-pill px-2 py-0.5 text-[11px] font-semibold text-zinc-700">{type}</span>
                 </div>
               </div>
               <div role="heading" aria-level={3} className="mt-4 text-base font-bold leading-6 text-foreground group-hover:text-zinc-950 transition-colors">{title}</div>
               <p className="mt-2 min-h-10 text-sm leading-5 text-muted-foreground group-hover:text-zinc-800 transition-colors">{description}</p>
               <div className="mt-3 flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700">
+                <span className="inline-flex items-center gap-1 rounded-md liquid-glass-subtle px-2.5 py-1 text-xs font-semibold text-zinc-700 border border-white/60">
                   <FileText size={12} className="text-primary" /> {pages} trang
                 </span>
               </div>
-              <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
+              <div className="mt-5 flex items-center justify-between border-t border-zinc-200/50 pt-4">
                 <span className="text-xs font-medium text-muted-foreground">{meta}</span>
-                <Button type="button" variant="ghost" onClick={() => setView("resources")} className="h-8 rounded-md px-2 text-xs font-semibold text-primary hover:bg-secondary hover:text-zinc-950">Mở tài liệu <ArrowRight size={13} /></Button>
+                <Button type="button" variant="ghost" onClick={() => setView("resources")} className="h-8 rounded-md liquid-glass-subtle px-2 text-xs font-semibold text-primary hover:liquid-glass hover:text-zinc-950 transition-all">Mở tài liệu <ArrowRight size={13} /></Button>
               </div>
             </article>
           ))}
@@ -573,74 +671,71 @@ const initialConversations: ConversationItem[] = [
   },
 ];
 
-interface CompanionPoseData {
+interface AdaptiveStudyMode {
   id: string;
   name: string;
   label: string;
   badge: string;
-  img: string;
+  icon: any;
   prompt: string;
   description: string;
 }
 
-const companionPosesList: CompanionPoseData[] = [
+const adaptiveStudyModes: AdaptiveStudyMode[] = [
   {
-    id: "nice_try",
-    name: "Nice try!",
-    label: "Encouraging",
+    id: "step_by_step",
+    name: "Hướng dẫn từng bước",
+    label: "Từng bước",
     badge: "Supportive",
-    img: "/assets/ata/use_nice_try.png",
-    prompt: "Ata ơi, mình làm sai câu này, hãy cùng mình phân tích và giải thích từng bước nhé!",
-    description: "Khích lệ bạn kiên trì và chia nhỏ thử thách.",
+    icon: ListOrdered,
+    prompt: "ATA ơi, mình đang có một câu bài tập khó, hãy hướng dẫn mình giải theo từng bước nhé!",
+    description: "Chia nhỏ yêu cầu đề bài và dẫn dắt lập luận từng bước rõ ràng.",
   },
   {
-    id: "got_it",
-    name: "Got it!",
-    label: "Explaining",
+    id: "deep_concept",
+    name: "Giải thích bản chất",
+    label: "Bản chất",
     badge: "Knowledgeable",
-    img: "/assets/ata/use_got_it.png",
-    prompt: "Ata hãy giúp mình tổng hợp lại phương pháp giải quyết dạng bài tập này!",
-    description: "Củng cố kiến thức sâu và logic bài học.",
+    icon: Lightbulb,
+    prompt: "ATA hãy giải thích giúp mình cốt lõi của bài học này theo cách trực quan nhất!",
+    description: "Tổng hợp quy luật nền tảng và cách áp dụng vào thực tế.",
   },
   {
-    id: "level_up",
-    name: "Level Up!",
-    label: "Celebrating",
-    badge: "Progress",
-    img: "/assets/ata/use_level_up.png",
-    prompt: "Ata ơi, mình vừa xong bài học hôm nay, hãy kiểm tra trình độ giúp mình để thăng hạng nhé!",
-    description: "Ghi nhận nỗ lực và thúc đẩy tiến độ cá nhân.",
-  },
-  {
-    id: "happy",
-    name: "Happy",
-    label: "Tươi vui",
-    badge: "Positive",
-    img: "/assets/ata/ata_happy.png",
-    prompt: "Ata ơi, hôm nay có mẹo học tiếng Anh nào thú vị và dễ áp dụng không?",
-    description: "Khởi đầu phiên học tràn đầy năng lượng.",
-  },
-  {
-    id: "thinking",
-    name: "Thinking",
-    label: "Suy ngẫm",
-    badge: "Adaptive",
-    img: "/assets/ata/ata_thinking.png",
-    prompt: "Ata hãy phân tích kỹ các bẫy thường gặp trong đề thi THPT nhé!",
-    description: "Suy luận đa chiều và phân tích chi tiết.",
-  },
-  {
-    id: "excited",
-    name: "Excited",
-    label: "Hào hứng",
+    id: "practice_drill",
+    name: "Luyện tập tương tác",
+    label: "Luyện tập",
     badge: "Active",
-    img: "/assets/ata/ata_excited.png",
-    prompt: "Đố Ata một câu hỏi ngữ pháp tiếng Anh nâng cao thử xem!",
-    description: "Sẵn sàng đón nhận những bài tập khó hơn.",
+    icon: CheckCircle2,
+    prompt: "Cho mình 3 câu hỏi trắc nghiệm kèm giải thích chi tiết để kiểm tra hiểu bài nhé!",
+    description: "Thực hành ngay với các câu hỏi kiểm tra nhanh kiến thức.",
+  },
+  {
+    id: "exam_strategy",
+    name: "Chiến thuật phòng thi",
+    label: "Chiến thuật",
+    badge: "Adaptive",
+    icon: Zap,
+    prompt: "Chỉ ra giúp mình 3 bẫy phổ biến thường gặp nhất trong đề thi về chủ đề này!",
+    description: "Nhận diện bẫy đề thi và tối ưu hóa thời gian làm bài.",
+  },
+  {
+    id: "milestone_check",
+    name: "Mốc thăng hạng",
+    label: "Thăng hạng",
+    badge: "Progress",
+    icon: Trophy,
+    prompt: "ATA ơi, đánh giá giúp mình tiến độ học hiện tại và gợi ý thử thách nâng cao!",
+    description: "Theo dõi dữ liệu học tập và nâng cao độ thử thách theo từng mốc.",
   },
 ];
 
-function ChatScreen({ initialPrompt }: { initialPrompt: string }) {
+function ChatScreen({
+  initialPrompt,
+  userProfile,
+}: {
+  initialPrompt: string;
+  userProfile?: UserProfile;
+}) {
   const [conversations, setConversations] = useState<ConversationItem[]>(() => {
     if (initialPrompt) {
       const initialTitle = initialPrompt.length > 38 ? `${initialPrompt.slice(0, 38).trim()}...` : initialPrompt;
@@ -670,7 +765,7 @@ function ChatScreen({ initialPrompt }: { initialPrompt: string }) {
   const [typing, setTyping] = useState(Boolean(initialPrompt));
   const [attachment, setAttachment] = useState("");
   const [feedback, setFeedback] = useState<Record<number, "up" | "down">>({});
-  const [activePoseId, setActivePoseId] = useState<string>("nice_try");
+  const [activeModeId, setActiveModeId] = useState<string>("step_by_step");
   const endRef = useRef<HTMLDivElement | null>(null);
   const nextId = useRef(initialPrompt ? 1 : 0);
 
@@ -913,21 +1008,12 @@ function ChatScreen({ initialPrompt }: { initialPrompt: string }) {
                 </div>
               </ScrollArea>
             </TooltipProvider>
-
-            <div className="mt-4 shrink-0 rounded-md border border-border bg-zinc-50 p-3">
-              <div className="flex items-center gap-2 text-xs font-semibold">
-                <Sparkles size={14} className="text-primary" /> Mẹo sử dụng AI
-              </div>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                Nêu rõ môn học, mục tiêu và phần bạn chưa hiểu để nhận câu trả lời tốt hơn.
-              </p>
-            </div>
           </div>
         </SheetContent>
       </Sheet>
 
-      <aside className="hidden h-full min-h-0 flex-col overflow-hidden border-r border-border bg-zinc-50/70 p-4 lg:flex w-full min-w-0">
-        <Button type="button" onClick={handleNewConversation} className="h-10 w-full shrink-0 justify-start rounded-md font-semibold shadow-none">
+      <aside className="liquid-glass hidden h-full min-h-0 flex-col overflow-hidden border-r border-white/70 bg-white/60 backdrop-blur-xl p-4 lg:flex w-full min-w-0">
+        <Button type="button" onClick={handleNewConversation} className="h-10 w-full shrink-0 justify-start rounded-md font-semibold shadow-xs">
           <SquarePen size={16} /> Cuộc trò chuyện mới
         </Button>
         <div className="mb-2 mt-6 flex shrink-0 items-center justify-between px-2">
@@ -945,10 +1031,10 @@ function ChatScreen({ initialPrompt }: { initialPrompt: string }) {
                         type="button"
                         variant="ghost"
                         onClick={() => handleOpenConversation(conv)}
-                        className={`flex h-auto w-full max-w-full min-w-0 items-center justify-start overflow-hidden rounded-md py-2.5 pl-3 pr-8 text-left text-sm font-medium transition-colors ${
+                        className={`flex h-auto w-full max-w-full min-w-0 items-center justify-start overflow-hidden rounded-md py-2.5 pl-3 pr-8 text-left text-sm font-medium transition-all ${
                           activeConvId === conv.id
-                            ? "bg-white text-zinc-950 font-semibold shadow-xs ring-1 ring-border hover:bg-zinc-50 hover:text-zinc-950"
-                            : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950"
+                            ? "liquid-glass-elevated text-zinc-950 font-bold border-white/90 shadow-xs"
+                            : "liquid-glass-subtle text-zinc-700 hover:liquid-glass hover:text-zinc-950"
                         }`}
                         title={conv.title}
                         aria-label={conv.title}
@@ -987,35 +1073,29 @@ function ChatScreen({ initialPrompt }: { initialPrompt: string }) {
             </div>
           </ScrollArea>
         </TooltipProvider>
-        <div className="mt-4 shrink-0 rounded-md border border-border bg-white p-3">
-          <div className="flex items-center gap-2 text-xs font-semibold"><Sparkles size={14} className="text-primary" /> Mẹo sử dụng AI</div>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">Nêu rõ môn học, mục tiêu và phần bạn chưa hiểu để nhận câu trả lời tốt hơn.</p>
-        </div>
       </aside>
 
-      <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white" aria-label="Trò chuyện với ATA AI">
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-border px-3 sm:px-6">
+      <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white/40 backdrop-blur-md" aria-label="Trò chuyện với ATA AI">
+        <div className="liquid-glass flex h-16 shrink-0 items-center justify-between border-b border-white/60 bg-white/75 backdrop-blur-xl px-3 sm:px-6 shadow-2xs">
           <div className="flex items-center gap-2 sm:gap-3">
             <Button
               type="button"
               variant="ghost"
               size="icon"
               onClick={() => setHistoryOpen(true)}
-              className="size-9 rounded-md text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 lg:hidden"
+              className="liquid-glass-subtle size-9 rounded-md text-zinc-600 hover:liquid-glass hover:text-zinc-950 lg:hidden"
               aria-label="Mở danh sách cuộc trò chuyện"
               title="Mở cuộc trò chuyện"
             >
               <History size={18} />
             </Button>
-            <img
-              src="/assets/ata/ata_avatar.png"
-              alt="Ata"
-              className="size-9 rounded-md border border-zinc-200 object-cover shadow-2xs"
-            />
+            <div className="flex size-9 items-center justify-center rounded-md bg-zinc-950 text-white shadow-2xs">
+              <Bot size={18} />
+            </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold">ATA AI (Ata)</p>
+              <p className="truncate text-sm font-bold">ATA AI</p>
               <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="size-1.5 rounded-full bg-emerald-500" /> Gia sư thích ứng · Sẵn sàng
+                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" /> Gia sư thích ứng · Sẵn sàng
               </p>
             </div>
           </div>
@@ -1025,7 +1105,7 @@ function ChatScreen({ initialPrompt }: { initialPrompt: string }) {
               variant="outline"
               size="sm"
               onClick={() => setHistoryOpen(true)}
-              className="h-9 gap-1.5 rounded-md border-border px-2.5 text-xs font-semibold text-zinc-700 shadow-none hover:bg-zinc-100 hover:text-zinc-950 hover:border-zinc-300 lg:hidden"
+              className="liquid-glass-subtle h-9 gap-1.5 rounded-md px-2.5 text-xs font-semibold text-zinc-700 shadow-none hover:liquid-glass hover:text-zinc-950 border-white/80 lg:hidden"
               aria-label="Mở cuộc trò chuyện"
               title="Mở danh sách cuộc trò chuyện"
             >
@@ -1036,7 +1116,7 @@ function ChatScreen({ initialPrompt }: { initialPrompt: string }) {
               type="button"
               size="sm"
               onClick={handleNewConversation}
-              className="h-9 gap-1.5 rounded-md px-2.5 text-xs font-semibold shadow-none sm:px-3 sm:text-sm"
+              className="h-9 gap-1.5 rounded-md px-2.5 text-xs font-semibold shadow-xs sm:px-3 sm:text-sm"
               aria-label="Tạo cuộc trò chuyện mới"
               title="Tạo cuộc trò chuyện mới"
             >
@@ -1050,36 +1130,29 @@ function ChatScreen({ initialPrompt }: { initialPrompt: string }) {
         <ScrollArea className="min-h-0 flex-1">
           {messages.length === 0 ? (
             <div className="mx-auto flex min-h-full max-w-2xl flex-col items-center justify-center px-4 py-8 text-center sm:px-8">
-              <div className="relative mb-2 flex items-center justify-center">
-                <img
-                  src="/assets/ata/ata_hero.png"
-                  alt="Ata mascot"
-                  className="size-24 object-contain drop-shadow-sm transition-transform hover:scale-105 duration-300"
-                />
+              <div className="relative mb-3 flex items-center justify-center">
+                <div className="flex size-14 items-center justify-center rounded-md bg-zinc-950 text-white shadow-xs">
+                  <Bot size={28} />
+                </div>
               </div>
-              <span className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] font-bold text-zinc-800">
-                <Sparkles size={13} className="text-zinc-600" /> Different Learners. Same Goal.
-              </span>
               <div role="heading" aria-level={1} className="mt-3 text-2xl font-bold tracking-tight">
-                Hôm nay bạn muốn học gì cùng Ata?
+                Hôm nay bạn muốn học gì cùng ATA?
               </div>
               <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
-                Đặt câu hỏi, gửi bài tập hoặc yêu cầu Ata đồng hành giải thích từng bước rõ ràng.
+                Đặt câu hỏi, gửi bài tập hoặc yêu cầu ATA đồng hành giải thích từng bước rõ ràng.
               </p>
               <div className="mt-7 grid w-full gap-3 sm:grid-cols-2">
-                {suggestedPrompts.map(({ text, pose, label }) => (
+                {suggestedPrompts.map(({ text, icon: Icon, label }) => (
                   <Button
                     key={text}
                     type="button"
                     variant="outline"
                     onClick={() => send(text)}
-                    className="group h-auto min-h-16 justify-start whitespace-normal rounded-md border-border bg-white p-3 text-left transition-all hover:border-zinc-400 hover:bg-zinc-100 hover:text-zinc-950 shadow-xs"
+                    className="liquid-glass liquid-glass-interactive group h-auto min-h-16 justify-start whitespace-normal rounded-lg border border-white/80 p-3 text-left shadow-xs hover:border-white hover:bg-white/90"
                   >
-                    <img
-                      src={pose}
-                      alt={label}
-                      className="mr-3 size-10 shrink-0 rounded-md object-contain border border-zinc-200/80 bg-zinc-50 p-0.5"
-                    />
+                    <div className="liquid-glass-pill mr-3 flex size-10 shrink-0 items-center justify-center rounded-md border border-white/80 text-zinc-900 group-hover:bg-zinc-950 group-hover:text-white transition-colors shadow-2xs">
+                      <Icon size={18} />
+                    </div>
                     <div className="min-w-0 flex-1">
                       <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground group-hover:text-zinc-700">
                         {label}
@@ -1105,22 +1178,22 @@ function ChatScreen({ initialPrompt }: { initialPrompt: string }) {
               {messages.map(message => (
                 <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                   {message.role === "assistant" && (
-                    <img
-                      src="/assets/ata/ata_avatar.png"
-                      alt="Ata"
-                      className="size-9 shrink-0 rounded-md border border-zinc-200 object-cover shadow-2xs"
-                    />
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-zinc-950 text-white shadow-2xs">
+                      <Bot size={16} />
+                    </div>
                   )}
                   <div className={`max-w-[88%] sm:max-w-[82%] ${message.role === "user" ? "order-first" : ""}`}>
-                    <div className={`rounded-lg px-4 py-3 text-[15px] leading-7 ${message.role === "user" ? "rounded-tr-xs bg-primary text-white" : message.error ? "rounded-tl-xs border border-red-200 bg-red-50 text-red-800" : "rounded-tl-xs border border-border bg-zinc-50 text-foreground"}`}>
+                    <div className={`rounded-lg px-4 py-3 text-[15px] leading-7 shadow-xs ${message.role === "user" ? "rounded-tr-xs bg-zinc-950 text-white border border-zinc-800" : message.error ? "rounded-tl-xs border border-red-200 bg-red-50 text-red-800" : "liquid-glass rounded-tl-xs border border-white/80 text-foreground"}`}>
                       <p className="whitespace-pre-wrap">{message.content}</p>
                       {message.role === "assistant" && !message.error && (
-                        <div className="mt-4 space-y-3 border-t border-border pt-3">
-                          <div className="flex items-center gap-2.5 rounded-md border border-zinc-200/90 bg-white p-2.5 shadow-2xs">
-                            <img src="/assets/ata/use_got_it.png" alt="Got it" className="size-11 object-contain shrink-0" />
+                        <div className="mt-4 space-y-3 border-t border-zinc-200/50 pt-3">
+                          <div className="flex items-center gap-2.5 rounded-md liquid-glass-subtle border border-white/70 p-2.5 shadow-2xs">
+                            <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-zinc-950 text-white shadow-xs">
+                              <CheckCircle2 size={16} />
+                            </div>
                             <div className="min-w-0">
-                              <p className="text-xs font-bold text-zinc-950">Got it! That's a great understanding!</p>
-                              <p className="text-[11px] text-zinc-500">Ata đồng hành cùng bạn qua 3 bước cốt lõi:</p>
+                              <p className="text-xs font-bold text-zinc-950">Quy trình giải bài thích ứng</p>
+                              <p className="text-[11px] text-zinc-500">ATA phân tích và đồng hành qua 3 bước cốt lõi:</p>
                             </div>
                           </div>
                           <ol className="list-decimal space-y-1 pl-5">
@@ -1128,11 +1201,11 @@ function ChatScreen({ initialPrompt }: { initialPrompt: string }) {
                             <li>Áp dụng kiến thức nền vào từng phần nhỏ.</li>
                             <li>Kiểm tra lại kết quả bằng một cách khác.</li>
                           </ol>
-                          <div className="rounded-md bg-zinc-950 px-4 py-3 font-mono text-sm text-zinc-100">Kết quả = Kiến thức nền + Thực hành có phản hồi</div>
+                          <div className="rounded-md bg-zinc-950 px-4 py-3 font-mono text-sm text-zinc-100 shadow-xs">Kết quả = Kiến thức nền + Thực hành có phản hồi</div>
                           <div className="mt-3 pt-2.5 border-t border-zinc-200/60 flex items-center justify-between text-xs text-zinc-600">
                             <span className="flex items-center gap-1.5 font-medium">
-                              <img src="/assets/ata/ata_explaining.png" alt="Explaining" className="size-5 object-contain" />
-                              Giải thích từng bước bởi Ata (Adaptive Tutoring Agent)
+                              <Bot size={14} className="text-zinc-900" />
+                              Giải thích từng bước bởi ATA (Adaptive Tutoring Agent)
                             </span>
                             <span className="text-[11px] text-zinc-400">Different Learners. Same Goal.</span>
                           </div>
@@ -1155,18 +1228,20 @@ function ChatScreen({ initialPrompt }: { initialPrompt: string }) {
                       </div>
                     )}
                   </div>
-                  {message.role === "user" && <span className="hidden size-8 shrink-0 items-center justify-center rounded-md bg-zinc-900 text-xs font-bold text-white sm:flex">NA</span>}
+                  {message.role === "user" && (
+                    <span className="hidden size-8 shrink-0 items-center justify-center rounded-md bg-zinc-900 text-xs font-bold text-white sm:flex">
+                      {userProfile ? getInitials(userProfile.name) : "NA"}
+                    </span>
+                  )}
                 </div>
               ))}
               {typing && (
                 <div className="flex items-center gap-3" aria-live="polite">
-                  <img
-                    src="/assets/ata/ata_thinking.png"
-                    alt="Ata Thinking"
-                    className="size-9 shrink-0 rounded-md border border-zinc-200 bg-zinc-50 p-0.5 object-contain"
-                  />
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-zinc-950 text-white shadow-2xs">
+                    <Bot size={16} />
+                  </div>
                   <div className="flex items-center gap-2 rounded-lg rounded-tl-xs border border-border bg-zinc-50 px-4 py-3">
-                    <span className="text-xs font-semibold text-zinc-700">Ata đang suy nghĩ</span>
+                    <span className="text-xs font-semibold text-zinc-700">ATA đang xử lý</span>
                     <div className="flex items-center gap-1 ml-1">
                       <span className="size-1.5 animate-pulse rounded-full bg-zinc-950" />
                       <span className="size-1.5 animate-pulse rounded-full bg-zinc-950 [animation-delay:150ms]" />
@@ -1181,17 +1256,17 @@ function ChatScreen({ initialPrompt }: { initialPrompt: string }) {
           )}
         </ScrollArea>
 
-        <div className="shrink-0 border-t border-border bg-white px-3 py-3 sm:px-6 sm:py-4">
+        <div className="shrink-0 liquid-glass border-t border-white/60 bg-white/70 backdrop-blur-xl px-3 py-3 sm:px-6 sm:py-4 shadow-[0_-4px_20px_rgba(0,0,0,0.02)]">
           <div className="mx-auto max-w-3xl">
             {attachment && (
-              <div className="mb-2 inline-flex items-center gap-2 rounded-md bg-zinc-100 border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-900">
+              <div className="mb-2 inline-flex items-center gap-2 rounded-md liquid-glass-pill px-3 py-1.5 text-xs font-semibold text-zinc-900 border-white/80">
                 <FileText size={13} /> {attachment}
                 <Button type="button" variant="ghost" size="icon" onClick={() => setAttachment("")} className="size-5 rounded-md text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950" aria-label="Xóa tệp đính kèm"><X size={12} /></Button>
               </div>
             )}
-            <div className="flex items-end gap-2 rounded-md border border-border bg-white p-2 focus-within:border-primary focus-within:ring-2 focus-within:ring-zinc-950/10">
+            <div className="liquid-glass-elevated flex items-end gap-2 rounded-xl border border-white/90 p-2 shadow-[0_12px_32px_-4px_rgba(0,0,0,0.06)] focus-within:border-zinc-950 focus-within:ring-2 focus-within:ring-zinc-950/10">
               <Input id="chat-file-input" type="file" className="hidden" onChange={event => setAttachment(event.target.files?.[0]?.name ?? "")} aria-label="Chọn tệp đính kèm" />
-              <Button type="button" variant="ghost" size="icon" onClick={() => document.getElementById("chat-file-input")?.click()} className="size-9 shrink-0 rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950" aria-label="Đính kèm tệp"><Paperclip size={17} /></Button>
+              <Button type="button" variant="ghost" size="icon" onClick={() => document.getElementById("chat-file-input")?.click()} className="liquid-glass-subtle size-9 shrink-0 rounded-md text-zinc-600 hover:liquid-glass hover:text-zinc-950" aria-label="Đính kèm tệp"><Paperclip size={17} /></Button>
               <Textarea
                 value={input}
                 onChange={event => setInput(event.target.value)}
@@ -1201,65 +1276,70 @@ function ChatScreen({ initialPrompt }: { initialPrompt: string }) {
                     send();
                   }
                 }}
-                placeholder="Nhập câu hỏi của bạn cho Ata..."
+                placeholder="Nhập câu hỏi của bạn cho ATA..."
                 className="max-h-32 min-h-10 resize-none border-0 bg-transparent px-1 py-2 text-base shadow-none focus-visible:ring-0"
                 aria-label="Tin nhắn cho ATA AI"
               />
-              <Button type="button" size="icon" onClick={() => send()} disabled={!input.trim() || typing} className="size-9 shrink-0 rounded-md shadow-none hover:bg-primary/90 hover:text-white" aria-label="Gửi tin nhắn"><Send size={16} /></Button>
+              <Button type="button" size="icon" onClick={() => send()} disabled={!input.trim() || typing} className="size-9 shrink-0 rounded-md shadow-xs bg-zinc-950 text-white hover:bg-zinc-800" aria-label="Gửi tin nhắn"><Send size={16} /></Button>
             </div>
             <p className="mt-2 hidden text-center text-[11px] text-muted-foreground sm:block">Enter để gửi · Shift + Enter để xuống dòng · ATA AI đồng hành và có thể mắc lỗi, hãy kiểm tra lại thông tin quan trọng</p>
           </div>
         </div>
       </section>
 
-      <aside className="hidden h-full min-h-0 overflow-y-auto border-l border-border bg-zinc-50/70 p-5 xl:block">
-        {/* Ata Companion Card */}
+      <aside className="liquid-glass hidden h-full min-h-0 overflow-y-auto border-l border-white/70 bg-white/60 backdrop-blur-xl p-5 xl:block">
+        {/* ATA Adaptive Study Modes Card */}
         {(() => {
-          const currentPose = companionPosesList.find(p => p.id === activePoseId) || companionPosesList[0];
+          const currentMode = adaptiveStudyModes.find(m => m.id === activeModeId) || adaptiveStudyModes[0];
+          const ModeIcon = currentMode.icon;
           return (
-            <div className="mb-5 rounded-md border border-zinc-200 bg-white p-3.5 shadow-2xs">
+            <div className="mb-5 rounded-lg liquid-glass border border-white/80 p-3.5 shadow-2xs">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Gia sư đồng hành</span>
-                <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] font-bold text-zinc-900">{currentPose.badge}</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Chế độ học tập</span>
+                <span className="rounded-md liquid-glass-pill px-2 py-0.5 text-[10px] font-bold text-zinc-900">{currentMode.badge}</span>
               </div>
-              <div className="mt-2.5 overflow-hidden rounded-md border border-zinc-100 bg-zinc-50 p-2 flex items-center justify-center min-h-[140px]">
-                <img
-                  src={currentPose.img}
-                  alt={currentPose.name}
-                  className="max-h-32 w-auto object-contain transition-all duration-300"
-                />
-              </div>
-              <div className="mt-3">
-                <p className="text-xs font-bold text-zinc-900 leading-snug">{currentPose.name}</p>
-                <p className="mt-1 text-[11px] text-zinc-600 leading-relaxed">{currentPose.description}</p>
+              <div className="mt-2.5 rounded-md liquid-glass-subtle border border-white/70 p-4 shadow-2xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-zinc-950 text-white shadow-xs">
+                    <ModeIcon size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-zinc-900 truncate">{currentMode.name}</p>
+                    <p className="text-[10px] text-zinc-500">{currentMode.label}</p>
+                  </div>
+                </div>
+                <p className="mt-2.5 text-xs text-zinc-600 leading-relaxed">{currentMode.description}</p>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => send(currentPose.prompt)}
-                  className="mt-2.5 h-8 w-full justify-center rounded-md border-zinc-200 bg-zinc-50 px-2 text-[11px] font-semibold text-zinc-800 hover:bg-zinc-100 hover:text-zinc-950"
+                  onClick={() => send(currentMode.prompt)}
+                  className="mt-3 h-8 w-full justify-center rounded-md border-zinc-200 bg-white px-2 text-xs font-semibold text-zinc-900 hover:bg-zinc-100 hover:text-zinc-950"
                 >
-                  Nhờ Ata: {currentPose.label} <ArrowRight size={11} className="ml-1" />
+                  Kích hoạt: {currentMode.label} <ArrowRight size={11} className="ml-1" />
                 </Button>
               </div>
 
               <div className="mt-3.5 pt-3 border-t border-zinc-100">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Biểu cảm & Tư thế của Ata:</p>
-                <div className="mt-2 grid grid-cols-6 gap-1">
-                  {companionPosesList.map(item => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setActivePoseId(item.id)}
-                      title={`Ata ${item.name}: ${item.label}`}
-                      className={`group relative flex flex-col items-center justify-center rounded-md border p-1 transition-all ${
-                        activePoseId === item.id
-                          ? "border-zinc-900 bg-zinc-100 shadow-2xs ring-1 ring-zinc-900"
-                          : "border-zinc-200 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100"
-                      }`}
-                    >
-                      <img src={item.img} alt={item.name} className="size-6 object-contain group-hover:scale-110 transition-transform" />
-                    </button>
-                  ))}
+                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Các chế độ thích ứng:</p>
+                <div className="mt-2 space-y-1">
+                  {adaptiveStudyModes.map(item => {
+                    const ItemIcon = item.icon;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setActiveModeId(item.id)}
+                        className={`flex w-full items-center gap-2.5 rounded-md border px-2.5 py-2 text-left text-xs transition-all ${
+                          activeModeId === item.id
+                            ? "border-zinc-950 bg-zinc-950 text-white font-semibold"
+                            : "border-zinc-200 bg-zinc-50 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-950"
+                        }`}
+                      >
+                        <ItemIcon size={14} className={activeModeId === item.id ? "text-white" : "text-zinc-600"} />
+                        <span className="flex-1 truncate">{item.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1607,23 +1687,23 @@ function ResourcesScreen({
       {/* Resource Cards Grid */}
       <div className="grid gap-5 py-6 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((item) => {
-          const { id, icon: Icon, type, title, description, meta, pages, tone, isUserUploaded, fileFormat } = item;
+          const { id, icon: Icon, type, title, description, meta, pages, isUserUploaded, fileFormat } = item;
           return (
             <article
               key={id}
-              className={`group flex min-h-64 flex-col rounded-lg border bg-white p-5 transition-all hover:-translate-y-0.5 hover:shadow-xs ${isUserUploaded ? "border-zinc-900/40 ring-1 ring-zinc-900/10" : "border-border hover:border-zinc-400"}`}
+              className={`liquid-glass liquid-glass-interactive group flex min-h-64 flex-col rounded-lg border p-5 transition-all shadow-xs ${isUserUploaded ? "border-zinc-900/40 ring-1 ring-zinc-900/10" : "border-white/80 hover:border-white hover:bg-white/90"}`}
             >
               <div className="flex items-start justify-between">
-                <span className={`flex size-10 items-center justify-center rounded-md ${tone}`}>
+                <span className="liquid-glass-pill flex size-10 items-center justify-center rounded-md border border-white/80 shadow-2xs text-zinc-950">
                   <Icon size={19} />
                 </span>
                 <div className="flex items-center gap-1.5">
                   {isUserUploaded && (
-                    <span className="rounded-md border border-zinc-200 bg-zinc-100 px-2.5 py-0.5 text-[11px] font-bold text-zinc-900">
+                    <span className="rounded-md liquid-glass-pill border border-white/80 px-2.5 py-0.5 text-[11px] font-bold text-zinc-900 shadow-2xs">
                       Của bạn
                     </span>
                   )}
-                  <span className="rounded-md bg-zinc-100 px-2.5 py-0.5 text-[11px] font-semibold text-zinc-700">
+                  <span className="rounded-md liquid-glass-pill px-2.5 py-0.5 text-[11px] font-semibold text-zinc-700">
                     {type}
                   </span>
                 </div>
@@ -1638,7 +1718,7 @@ function ResourcesScreen({
 
               {/* Number of Pages Tag */}
               <div className="mt-4 flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700">
+                <span className="inline-flex items-center gap-1.5 rounded-md liquid-glass-subtle border border-white/60 px-2.5 py-1 text-xs font-semibold text-zinc-700">
                   <FileText size={13} className="text-primary" />
                   {pages} trang
                 </span>
@@ -2142,7 +2222,7 @@ function ResourcesScreen({
 
                       <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
                         <p className="font-bold text-xs uppercase tracking-wide text-zinc-900 flex items-center gap-1.5">
-                          <Sparkles size={14} className="text-primary" /> Mục tiêu cần đạt trong phần này:
+                          <CheckCircle2 size={14} className="text-primary" /> Mục tiêu cần đạt trong phần này:
                         </p>
                         <ul className="mt-2 list-disc pl-5 space-y-1 text-xs text-zinc-700">
                           <li>Nắm vững định nghĩa, cấu trúc nền tảng và nhận biết dấu hiệu bài thi.</li>
@@ -2182,11 +2262,13 @@ function ResourcesScreen({
                         </div>
                       </div>
 
-                      {/* Ata Study Companion Box */}
+                      {/* ATA Study Tip Box */}
                       <div className="rounded-md border border-zinc-200 bg-zinc-50/80 p-3.5 flex items-start gap-3">
-                        <img src="/assets/ata/ata_explaining.png" alt="Ata Tutor" className="size-8 object-contain shrink-0" />
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-zinc-950 text-white">
+                          <Lightbulb size={16} />
+                        </div>
                         <div className="text-xs">
-                          <p className="font-bold text-zinc-900">Ata Study Tip:</p>
+                          <p className="font-bold text-zinc-900">ATA Study Tip:</p>
                           <p className="mt-0.5 text-zinc-600 leading-5">
                             Gặp khó khăn ở phần nào trong bài đọc này? Hãy mở Trợ lý ATA để được giải thích chi tiết từng bước và nhận thêm 3 bài tập tự luyện tương đương.
                           </p>
@@ -2455,55 +2537,87 @@ function ResourcesScreen({
   );
 }
 
-function ProfileScreen({ openChat }: { openChat?: (prompt: string) => void }) {
+function ProfileScreen({
+  openChat,
+  userProfile,
+  onOpenEditProfile,
+}: {
+  openChat?: (prompt: string) => void;
+  userProfile: UserProfile;
+  onOpenEditProfile: () => void;
+}) {
   return (
     <main className="mx-auto max-w-[1200px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
-      <PageTitle eyebrow="Tiến độ học tập" title="Chào Nguyễn An, bạn đang tiến bộ rất tốt" description="Theo dõi mục tiêu, hoạt động gần đây và duy trì nhịp học đều đặn." />
+      <PageTitle
+        eyebrow="Tiến độ học tập"
+        title={`Chào ${userProfile.name}, bạn đang tiến bộ rất tốt`}
+        description="Theo dõi mục tiêu, hoạt động gần đây và duy trì nhịp học đều đặn."
+      />
       <div className="mt-8 grid grid-cols-12 gap-5">
-        <section className="col-span-12 rounded-lg border border-border bg-white p-4 sm:p-6 lg:col-span-8">
-          <SectionHeading title="Mục tiêu tuần này" description="11–17 tháng 8" action={<span className="rounded-md border border-zinc-200 bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-900">Đúng tiến độ</span>} />
+        <section className="liquid-glass col-span-12 rounded-xl border border-white/80 p-4 sm:p-6 shadow-xs lg:col-span-8">
+          <SectionHeading title="Mục tiêu tuần này" description="11–17 tháng 8" action={<span className="rounded-md liquid-glass-pill px-3 py-1 text-xs font-bold text-zinc-900 shadow-2xs">Đúng tiến độ</span>} />
           <div className="grid gap-4 sm:grid-cols-3">
             {[
-              { label: "Thời gian học", value: "4 giờ 20 phút", target: "Mục tiêu 5 giờ", icon: Clock3, progress: "w-[86%]", tone: "text-zinc-900 bg-zinc-100" },
-              { label: "Bài đã hoàn thành", value: "12 bài", target: "Mục tiêu 15 bài", icon: CheckCircle2, progress: "w-4/5", tone: "text-zinc-900 bg-zinc-100" },
-              { label: "Chuỗi học liên tục", value: "7 ngày", target: "Kỷ lục 12 ngày", icon: Trophy, progress: "w-7/12", tone: "text-zinc-900 bg-zinc-100" },
-            ].map(({ label, value, target, icon: Icon, progress, tone }) => (
-              <div key={label} className="rounded-md border border-border bg-zinc-50/50 p-4">
-                <span className={`flex size-9 items-center justify-center rounded-md ${tone}`}><Icon size={17} /></span>
+              { label: "Thời gian học", value: "4 giờ 20 phút", target: "Mục tiêu 5 giờ", icon: Clock3, progress: "w-[86%]" },
+              { label: "Bài đã hoàn thành", value: "12 bài", target: "Mục tiêu 15 bài", icon: CheckCircle2, progress: "w-4/5" },
+              { label: "Chuỗi học liên tục", value: "7 ngày", target: "Kỷ lục 12 ngày", icon: Trophy, progress: "w-7/12" },
+            ].map(({ label, value, target, icon: Icon, progress }) => (
+              <div key={label} className="liquid-glass-subtle liquid-glass-interactive rounded-md border border-white/70 p-4 shadow-2xs">
+                <span className="liquid-glass-pill flex size-9 items-center justify-center rounded-md border border-white/80 text-zinc-950 shadow-2xs"><Icon size={17} /></span>
                 <p className="mt-4 text-xs font-medium text-muted-foreground">{label}</p>
                 <p className="mt-1 text-lg font-bold">{value}</p>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-md bg-zinc-200"><div className={`h-full rounded-md bg-zinc-950 ${progress}`} /></div>
+                <div className="mt-3 h-1.5 overflow-hidden rounded-md bg-zinc-200/80"><div className={`h-full rounded-md bg-zinc-950 ${progress}`} /></div>
                 <p className="mt-2 text-[11px] text-muted-foreground">{target}</p>
               </div>
             ))}
           </div>
         </section>
 
-        <aside className="col-span-12 rounded-lg border border-border bg-white p-4 sm:p-6 lg:col-span-4">
+        <aside className="liquid-glass col-span-12 rounded-xl border border-white/80 p-4 sm:p-6 shadow-xs lg:col-span-4">
           <div className="flex items-center gap-4">
-            <span className="flex size-14 items-center justify-center rounded-md bg-zinc-950 text-base font-bold text-white">NA</span>
-            <div>
-              <p className="text-lg font-bold">Nguyễn An</p>
-              <p className="mt-1 text-sm text-muted-foreground">Học viên · Lớp 12</p>
+            <span className="flex size-14 items-center justify-center rounded-md bg-zinc-950 text-base font-bold text-white shadow-2xs">
+              {getInitials(userProfile.name)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-lg font-bold">{userProfile.name}</p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                {userProfile.role} · {userProfile.grade}
+              </p>
+              <p className="mt-1 inline-flex items-center gap-1.5 truncate text-[11px] font-medium text-zinc-500">
+                <Mail size={12} className="shrink-0" /> <span className="truncate">{userProfile.email}</span>
+              </p>
             </div>
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3">
-            <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-center"><p className="text-lg font-bold">1.280</p><p className="mt-1 text-[11px] text-muted-foreground">Điểm học tập</p></div>
-            <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-center"><p className="text-lg font-bold">B1+</p><p className="mt-1 text-[11px] text-muted-foreground">Trình độ hiện tại</p></div>
+            <div className="rounded-md liquid-glass-subtle border border-white/70 p-3 text-center shadow-2xs">
+              <p className="text-lg font-bold">{userProfile.points.toLocaleString("vi-VN")}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">Điểm học tập</p>
+            </div>
+            <div className="rounded-md liquid-glass-subtle border border-white/70 p-3 text-center shadow-2xs">
+              <p className="text-lg font-bold">{userProfile.level}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">Trình độ hiện tại</p>
+            </div>
           </div>
-          <Button type="button" variant="outline" className="mt-4 h-10 w-full rounded-md text-sm font-semibold text-zinc-800 hover:bg-zinc-100 hover:text-zinc-950"><Settings size={16} /> Chỉnh sửa hồ sơ</Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onOpenEditProfile}
+            className="mt-4 h-10 w-full rounded-md liquid-glass-subtle hover:liquid-glass text-sm font-semibold text-zinc-800 hover:text-zinc-950 border-white/80 transition-all cursor-pointer"
+          >
+            <Settings size={16} /> Chỉnh sửa hồ sơ
+          </Button>
         </aside>
 
-        <section className="col-span-12 rounded-lg border border-border bg-white p-4 sm:p-6 lg:col-span-8">
+        <section className="liquid-glass col-span-12 rounded-xl border border-white/80 p-4 sm:p-6 shadow-xs lg:col-span-8">
           <SectionHeading title="Hoạt động gần đây" description="Những nội dung bạn vừa học" />
           <div className="space-y-1">
             {[
-              { title: "Hoàn thành bài luyện đọc hiểu B1", time: "Hôm nay, 10:24", icon: CheckCircle2, tone: "bg-zinc-100 text-zinc-900" },
-              { title: "Hỏi ATA AI về thì hiện tại hoàn thành", time: "Hôm qua, 20:15", icon: Bot, tone: "bg-zinc-100 text-zinc-900" },
-              { title: "Lưu tài liệu 300 từ vựng học thuật", time: "12 tháng 8, 16:40", icon: BookOpen, tone: "bg-zinc-100 text-zinc-900" },
-            ].map(({ title, time, icon: Icon, tone }) => (
-              <div key={title} className="group flex items-center gap-3 rounded-md p-3 transition-colors hover:bg-zinc-50 cursor-pointer">
-                <span className={`flex size-9 items-center justify-center rounded-md ${tone}`}><Icon size={16} /></span>
+              { title: "Hoàn thành bài luyện đọc hiểu B1", time: "Hôm nay, 10:24", icon: CheckCircle2 },
+              { title: "Hỏi ATA AI về thì hiện tại hoàn thành", time: "Hôm qua, 20:15", icon: Bot },
+              { title: "Lưu tài liệu 300 từ vựng học thuật", time: "12 tháng 8, 16:40", icon: BookOpen },
+            ].map(({ title, time, icon: Icon }) => (
+              <div key={title} className="group flex items-center gap-3 rounded-md p-3 transition-colors hover:bg-white/60 cursor-pointer">
+                <span className="liquid-glass-pill flex size-9 items-center justify-center rounded-md border border-white/80 text-zinc-950 shadow-2xs"><Icon size={16} /></span>
                 <div className="flex-1"><p className="text-sm font-semibold text-foreground group-hover:text-zinc-950 transition-colors">{title}</p><p className="mt-1 text-xs text-muted-foreground group-hover:text-zinc-700 transition-colors">{time}</p></div>
                 <ChevronRight size={16} className="text-zinc-400 transition-transform group-hover:translate-x-0.5 group-hover:text-zinc-950" />
               </div>
@@ -2511,40 +2625,52 @@ function ProfileScreen({ openChat }: { openChat?: (prompt: string) => void }) {
           </div>
         </section>
 
-        <aside className="col-span-12 rounded-lg border border-border bg-white p-5 shadow-2xs lg:col-span-4 flex flex-col justify-between">
+        <aside className="liquid-glass-elevated col-span-12 rounded-xl border border-white/80 p-5 shadow-xs lg:col-span-4 flex flex-col justify-between">
           <div>
-            <div className="overflow-hidden rounded-md border border-zinc-100 bg-zinc-50 p-2 flex items-center justify-center">
-              <img
-                src="/assets/ata/use_level_up.png"
-                alt="Level Up! You're making real progress!"
-                className="max-h-40 w-auto object-contain"
-              />
+            <div className="rounded-md liquid-glass-subtle border border-white/70 p-4 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex size-8 items-center justify-center rounded-md bg-zinc-950 text-white shadow-2xs">
+                    <Trophy size={16} />
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">Tiến trình tuần</p>
+                    <p className="text-sm font-bold text-zinc-900">Mục tiêu: B1+ Mastery</p>
+                  </div>
+                </div>
+                <span className="rounded-sm bg-zinc-950 px-2 py-0.5 text-xs font-bold text-white shadow-2xs">80%</span>
+              </div>
+              <div className="mt-4 h-2 overflow-hidden rounded-md bg-zinc-200/80">
+                <div className="h-full w-4/5 rounded-md bg-zinc-950" />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-600">
+                <div className="rounded liquid-glass border border-white/80 p-2 text-center shadow-2xs">
+                  <p className="font-bold text-zinc-950 text-sm">7 ngày</p>
+                  <p className="text-[11px] text-zinc-500">Chuỗi liên tiếp</p>
+                </div>
+                <div className="rounded liquid-glass border border-white/80 p-2 text-center shadow-2xs">
+                  <p className="font-bold text-zinc-950 text-sm">12 bài</p>
+                  <p className="text-[11px] text-zinc-500">Đã hoàn thành</p>
+                </div>
+              </div>
             </div>
+
             <div className="mt-4 flex items-center gap-2">
-              <span className="inline-flex size-6 items-center justify-center rounded-md bg-zinc-950 text-white text-xs font-bold">
-                ★
+              <span className="inline-flex size-6 items-center justify-center rounded-md bg-zinc-950 text-white text-xs font-bold shadow-2xs">
+                <Trophy size={13} />
               </span>
               <p className="text-sm font-bold text-zinc-900">Mốc thành tích tuần</p>
             </div>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              Ata ghi nhận bạn đã hoàn thành 80% chỉ tiêu tuần! Chỉ cần thêm 20 phút luyện nghe hôm nay để mở khóa huy hiệu tuần mới.
+              Hệ thống ATA ghi nhận bạn đã hoàn thành 80% chỉ tiêu tuần! Chỉ cần thêm 20 phút luyện tập hôm nay để mở khóa chứng chỉ tuần mới.
             </p>
-            <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-zinc-700">Mục tiêu: B1+ Hoàn thành</span>
-                <span className="font-bold text-zinc-950">80%</span>
-              </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-md bg-zinc-200">
-                <div className="h-full w-4/5 rounded-md bg-zinc-950" />
-              </div>
-            </div>
           </div>
           <Button
             type="button"
-            onClick={() => openChat?.("Ata ơi, hôm nay hãy cho mình một bài kiểm tra ngắn để thăng cấp nhé!")}
-            className="mt-5 h-10 w-full rounded-md bg-zinc-950 text-sm font-semibold text-white shadow-none transition-colors hover:bg-zinc-800"
+            onClick={() => openChat?.("ATA ơi, hôm nay hãy cho mình một bài kiểm tra ngắn để thăng cấp nhé!")}
+            className="mt-5 h-10 w-full rounded-md bg-zinc-950 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-zinc-800"
           >
-            Luyện tập cùng Ata <ArrowRight size={15} />
+            Luyện tập cùng ATA <ArrowRight size={15} />
           </Button>
         </aside>
       </div>
@@ -2563,14 +2689,57 @@ export default function App() {
   const [view, setView] = useState<View>("home");
   const [chatPrompt, setChatPrompt] = useState("");
   const [resourceList, setResourceList] = useState<LibraryResource[]>(defaultResources);
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
+    try {
+      const saved = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // fallback
+    }
+    return DEFAULT_USER_PROFILE;
+  });
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [profileToast, setProfileToast] = useState<string | null>(null);
 
-  const handleLogin = (remember: boolean) => {
+  const handleSaveProfile = (
+    updated: UserProfile,
+    passwordChange?: { current: string; next: string }
+  ) => {
+    setUserProfile(updated);
+    try {
+      localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(updated));
+    } catch {
+      // ignore storage errors
+    }
+    const message = passwordChange
+      ? "Cập nhật hồ sơ và mật khẩu tài khoản thành công!"
+      : "Cập nhật thông tin hồ sơ thành công!";
+    setProfileToast(message);
+    setTimeout(() => {
+      setProfileToast(null);
+    }, 4500);
+  };
+
+  const handleLogin = (remember: boolean, userData?: { name?: string; email?: string }) => {
     try {
       localStorage.removeItem(AUTH_STORAGE_KEY);
       sessionStorage.removeItem(AUTH_STORAGE_KEY);
       (remember ? localStorage : sessionStorage).setItem(AUTH_STORAGE_KEY, "true");
     } catch {
       // Keep the demo session available when browser storage is blocked.
+    }
+    if (userData?.name || userData?.email) {
+      setUserProfile(prev => {
+        const next = {
+          ...prev,
+          name: userData.name || prev.name,
+          email: userData.email || prev.email,
+        };
+        try {
+          localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
     }
     setIsAuthenticated(true);
   };
@@ -2606,12 +2775,56 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen bg-background text-foreground ${view === "chat" ? "h-dvh max-h-dvh overflow-hidden flex flex-col" : ""}`}>
-      <AppHeader view={view} setView={navigate} onLogout={handleLogout} />
+    <div className={`relative min-h-screen bg-background text-foreground ${view === "chat" ? "h-dvh max-h-dvh overflow-hidden flex flex-col" : ""}`}>
+      {/* Ambient Liquid Glass Backdrop */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute -left-28 -top-28 size-[520px] rounded-full bg-gradient-to-br from-zinc-300/40 via-zinc-200/20 to-transparent blur-3xl animate-liquid-1" />
+        <div className="absolute right-0 top-1/4 size-[580px] rounded-full bg-gradient-to-bl from-zinc-300/35 via-zinc-100/20 to-transparent blur-3xl animate-liquid-2" />
+        <div className="absolute -bottom-24 left-1/3 size-[650px] rounded-full bg-gradient-to-tr from-zinc-200/45 via-zinc-100/20 to-transparent blur-3xl animate-liquid-1" />
+      </div>
+
+      <AppHeader
+        view={view}
+        setView={navigate}
+        onLogout={handleLogout}
+        userProfile={userProfile}
+        onOpenEditProfile={() => setIsEditProfileOpen(true)}
+      />
+
       {view === "home" && <HomeScreen setView={navigate} askAI={openChat} resources={resourceList} />}
-      {view === "chat" && <ChatScreen initialPrompt={chatPrompt} />}
+      {view === "chat" && <ChatScreen initialPrompt={chatPrompt} userProfile={userProfile} />}
       {view === "resources" && <ResourcesScreen openChat={openChat} resourceList={resourceList} setResourceList={setResourceList} />}
-      {view === "profile" && <ProfileScreen openChat={openChat} />}
+      {view === "profile" && (
+        <ProfileScreen
+          openChat={openChat}
+          userProfile={userProfile}
+          onOpenEditProfile={() => setIsEditProfileOpen(true)}
+        />
+      )}
+
+      {/* Edit Profile Dialog */}
+      <EditProfileDialog
+        open={isEditProfileOpen}
+        onOpenChange={setIsEditProfileOpen}
+        profile={userProfile}
+        onSave={handleSaveProfile}
+      />
+
+      {/* Floating Profile Success Toast */}
+      {profileToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-xs font-semibold text-white shadow-2xl animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+          <span>{profileToast}</span>
+          <button
+            type="button"
+            onClick={() => setProfileToast(null)}
+            className="ml-2 rounded p-0.5 text-zinc-400 hover:text-white cursor-pointer"
+            aria-label="Đóng thông báo"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

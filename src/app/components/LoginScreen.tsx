@@ -21,7 +21,7 @@ import { Label } from "./ui/label";
 
 interface LoginScreenProps {
   wordmark: ReactNode;
-  onLogin: (remember: boolean) => void;
+  onLogin: (remember: boolean, userData?: { name?: string; email?: string }) => void;
 }
 
 type AuthMode = "login" | "signup";
@@ -124,38 +124,46 @@ export function LoginScreen({ wordmark, onLogin }: LoginScreenProps) {
     setShowForgotPassword(false);
     setIsSubmitting(true);
     submitTimer.current = setTimeout(() => {
-      onLogin(mode === "signup" ? true : remember);
+      onLogin(mode === "signup" ? true : remember, {
+        name: name.trim() || undefined,
+        email: normalizedEmail || undefined,
+      });
       submitTimer.current = null;
     }, 500);
   };
 
   return (
-    <div className="grid min-h-screen bg-background lg:grid-cols-[1.05fr_0.95fr]">
-      <div className="relative hidden overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-950 to-black p-10 text-primary-foreground lg:flex xl:p-16">
-        <div className="absolute -left-20 -top-20 size-72 rounded-full bg-white/10" />
-        <div className="absolute -bottom-32 -right-24 size-96 rounded-full bg-accent/20" />
-        <div className="absolute left-1/2 top-1/3 size-40 rounded-full border border-white/10" />
+    <div className="relative grid min-h-screen bg-background lg:grid-cols-[1.1fr_0.9fr]">
+      {/* Ambient Liquid Glass Mesh Backdrop */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute -left-28 -top-28 size-[520px] rounded-full bg-gradient-to-br from-zinc-300/40 via-zinc-200/20 to-transparent blur-3xl animate-liquid-1" />
+        <div className="absolute right-0 top-1/4 size-[580px] rounded-full bg-gradient-to-bl from-zinc-300/35 via-zinc-100/20 to-transparent blur-3xl animate-liquid-2" />
+        <div className="absolute -bottom-24 left-1/3 size-[650px] rounded-full bg-gradient-to-tr from-zinc-200/45 via-zinc-100/20 to-transparent blur-3xl animate-liquid-1" />
+      </div>
+
+      {/* Left Feature Panel */}
+      <div className="relative hidden overflow-hidden bg-zinc-950 p-10 text-white lg:flex xl:p-14">
+        <div className="absolute -left-20 -top-20 size-80 rounded-full bg-zinc-800/30 blur-3xl animate-liquid-1" />
+        <div className="absolute -bottom-32 -right-24 size-96 rounded-full bg-zinc-800/20 blur-3xl animate-liquid-2" />
 
         <div className="relative z-10 flex w-full max-w-xl flex-col">
           <div className="flex items-center justify-between">
-            <div className="rounded-md bg-white px-3.5 py-1.5 text-foreground shadow-sm">
+            <div className="rounded-md liquid-glass px-3.5 py-1.5 text-zinc-950 shadow-xs border border-white/80">
               {wordmark}
             </div>
-            <span className="rounded-md border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-semibold text-white/90">
+            <span className="rounded-md border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-semibold text-white/90 backdrop-blur-md">
               Learn smarter. Grow further.
             </span>
           </div>
 
           <div className="my-auto py-8">
-            <div className="mb-6 flex items-center gap-4 rounded-md border border-white/15 bg-white/5 p-4 backdrop-blur-sm">
-              <img
-                src="/assets/ata/ata_sticker.png"
-                alt="Ata mascot sticker - You can do it!"
-                className="size-16 shrink-0 rounded-md object-contain"
-              />
+            <div className="mb-6 flex items-center gap-4 rounded-lg liquid-glass-dark border border-white/15 p-4 shadow-lg">
+              <div className="flex size-14 shrink-0 items-center justify-center rounded-md bg-white font-black text-xl text-zinc-950 shadow-xs">
+                ATA
+              </div>
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">Gia sư AI thích ứng</p>
-                <p className="text-base font-extrabold text-white">Gặp gỡ Ata — Bạn đồng hành học tập của bạn</p>
+                <p className="text-base font-extrabold text-white">Gặp gỡ ATA — Bạn đồng hành học tập của bạn</p>
                 <p className="mt-0.5 text-xs text-zinc-300">Different Learners. Same Goal.</p>
               </div>
             </div>
@@ -163,22 +171,22 @@ export function LoginScreen({ wordmark, onLogin }: LoginScreenProps) {
             <div role="heading" aria-level={1} className="max-w-lg text-3xl font-extrabold leading-tight tracking-tight xl:text-4xl">
               Học đúng cách, tiến bộ xa hơn cùng ATA.
             </div>
-            <p className="mt-3 max-w-lg text-sm font-semibold leading-relaxed text-primary-foreground/80">
-              Ata lắng nghe phong cách học của bạn, gợi ý bài tập phù hợp và luôn sẵn sàng hỗ trợ từng bước.
+            <p className="mt-3 max-w-lg text-sm font-semibold leading-relaxed text-zinc-300">
+              ATA lắng nghe phong cách học của bạn, gợi ý bài tập phù hợp và luôn sẵn sàng hỗ trợ từng bước.
             </p>
 
             <div className="mt-8 grid gap-3">
               {benefits.map(({ icon: Icon, title, description }) => (
                 <div
                   key={title}
-                  className="flex items-start gap-3.5 rounded-md border border-white/15 bg-white/10 p-3.5 backdrop-blur-sm"
+                  className="flex items-start gap-3.5 rounded-lg liquid-glass-dark border border-white/15 p-3.5 shadow-sm transition-all duration-300 hover:border-white/30 hover:bg-zinc-900/80"
                 >
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-white/15">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-white/15 text-white">
                     <Icon size={18} />
                   </div>
                   <div>
                     <p className="text-xs font-black">{title}</p>
-                    <p className="mt-0.5 text-xs font-medium leading-relaxed text-primary-foreground/75">
+                    <p className="mt-0.5 text-xs font-medium leading-relaxed text-zinc-300">
                       {description}
                     </p>
                   </div>
@@ -189,13 +197,14 @@ export function LoginScreen({ wordmark, onLogin }: LoginScreenProps) {
         </div>
       </div>
 
+      {/* Login / Signup Right Panel */}
       <div className="relative flex min-h-screen items-center justify-center p-4 sm:p-8 lg:p-12">
         <div className="w-full max-w-md">
           <div className="mb-6 flex items-center justify-center sm:mb-8 lg:hidden">
             {wordmark}
           </div>
 
-          <div className="rounded-lg border border-border bg-card p-5 sm:p-8">
+          <div className="rounded-xl liquid-glass-elevated border border-white/80 p-6 sm:p-8 shadow-xl">
             <div className="mb-7">
               <div role="heading" aria-level={1} className="text-2xl font-extrabold tracking-tight text-foreground">
                 {mode === "login" ? "ATA AI xin chào!" : "Bắt đầu học cùng ATA"}
@@ -251,7 +260,7 @@ export function LoginScreen({ wordmark, onLogin }: LoginScreenProps) {
                         if (errors.name) setErrors(current => ({ ...current, name: undefined }));
                       }}
                       placeholder="Nguyễn An"
-                      className="h-12 rounded-md border-border pl-10 text-sm font-semibold focus-visible:border-primary"
+                      className="h-12 rounded-md liquid-glass-subtle border-white/80 pl-10 text-sm font-semibold transition-all focus-visible:bg-white focus-visible:border-zinc-950"
                       autoFocus
                     />
                   </div>
@@ -285,7 +294,7 @@ export function LoginScreen({ wordmark, onLogin }: LoginScreenProps) {
                       if (errors.email) setErrors(current => ({ ...current, email: undefined }));
                     }}
                     placeholder="ban@example.com"
-                    className="h-12 rounded-md border-border pl-10 text-sm font-semibold focus-visible:border-primary"
+                    className="h-12 rounded-md liquid-glass-subtle border-white/80 pl-10 text-sm font-semibold transition-all focus-visible:bg-white focus-visible:border-zinc-950"
                     autoFocus={mode === "login"}
                   />
                 </div>
@@ -318,7 +327,7 @@ export function LoginScreen({ wordmark, onLogin }: LoginScreenProps) {
                       if (errors.password) setErrors(current => ({ ...current, password: undefined }));
                     }}
                     placeholder={mode === "login" ? "Nhập mật khẩu của bạn" : "Tối thiểu 8 ký tự"}
-                    className="h-12 rounded-md border-border px-10 text-sm font-semibold focus-visible:border-primary"
+                    className="h-12 rounded-md liquid-glass-subtle border-white/80 px-10 text-sm font-semibold transition-all focus-visible:bg-white focus-visible:border-zinc-950"
                   />
                   <Button
                     type="button"
@@ -346,26 +355,26 @@ export function LoginScreen({ wordmark, onLogin }: LoginScreenProps) {
                   </Label>
                   <div className="relative">
                     <LockKeyhole
-                      size={17}
-                      className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-                    />
-                    <Input
-                      id="signup-confirm-password"
-                      type={showConfirmPassword ? "text" : "password"}
-                      autoComplete="new-password"
-                      value={confirmPassword}
-                      disabled={isSubmitting}
-                      aria-invalid={Boolean(errors.confirmPassword)}
-                      aria-describedby={errors.confirmPassword ? "signup-confirm-password-error" : undefined}
-                      onChange={event => {
-                        setConfirmPassword(event.target.value);
-                        if (errors.confirmPassword) {
-                          setErrors(current => ({ ...current, confirmPassword: undefined }));
-                        }
-                      }}
-                      placeholder="Nhập lại mật khẩu"
-                      className="h-12 rounded-md border-border px-10 text-sm font-semibold focus-visible:border-primary"
-                    />
+                    size={17}
+                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <Input
+                    id="signup-confirm-password"
+                    type={showConfirmPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    disabled={isSubmitting}
+                    aria-invalid={Boolean(errors.confirmPassword)}
+                    aria-describedby={errors.confirmPassword ? "signup-confirm-password-error" : undefined}
+                    onChange={event => {
+                      setConfirmPassword(event.target.value);
+                      if (errors.confirmPassword) {
+                        setErrors(current => ({ ...current, confirmPassword: undefined }));
+                      }
+                    }}
+                    placeholder="Nhập lại mật khẩu"
+                    className="h-12 rounded-md liquid-glass-subtle border-white/80 px-10 text-sm font-semibold transition-all focus-visible:bg-white focus-visible:border-zinc-950"
+                  />
                     <Button
                       type="button"
                       variant="ghost"
